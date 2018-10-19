@@ -33,7 +33,6 @@ public class ServerTH {
 			toClient.write(result);
 			toClient.flush();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -59,7 +58,7 @@ public class ServerTH {
 			}
 			URL hostUrl = new URL(host);
 			System.out.println(host);
-			if (hostUrl.getProtocol().equals("https")) { // host.contains("https")){
+			if (hostUrl.getProtocol().equals("https")) {
 				con = (HttpsURLConnection) hostUrl.openConnection();
 			} else {
 				con = (HttpURLConnection) hostUrl.openConnection();
@@ -68,30 +67,22 @@ public class ServerTH {
 
 			try (InputStream input = con.getInputStream();
 					BufferedReader fromServer = new BufferedReader(new InputStreamReader(input))) {
-				for (String line = fromServer
-						.readLine(); line != null /* && line.length()>0 */; line = fromServer.readLine()) {
-					// if(line.charAt(0)== '<') {
+				for (String line = fromServer.readLine(); line != null && line.length() > 0; line = fromServer.readLine()) {
 					line = leet(line);
-					// }
 					serverResponse.append(line);
 				}
 				serverResponse = replaceImg(serverResponse);
 			} catch (MalformedURLException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (IllegalArgumentException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 
 		} catch (MalformedURLException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		} catch (IOException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		return serverResponse.toString();
@@ -110,17 +101,15 @@ public class ServerTH {
 
 	private static String leet(String htmlString) {
 		String[] replace = { "MMIX ", "Java ", "Computer ", "RISC ", "CISC ", "Debugger ", "Informatik ", "Student ",
-				"Studentin ", "Studierende", "Windows ", "Linux " };
+				"Studentin ", "Studierende", "Windows ", "Linux ", "Software", "InformatikerInnen", "Informatiker", "Informatikerin"};
 		String[][] replacements = new String[replace.length][replace.length];
 		for (int i = 0; i < replace.length; i++) {
 			replacements[0][i] = replace[i];
 			String tmp = replacements[0][i];
-			replacements[1][i] = tmp.toLowerCase().replace("a", "4").replace("b", "|3").replace("c", "(")
-					.replace("d", "|)").replace("e", "3").replace("f", "|=").replace("g", "(").replace("h", "|-|")
-					.replace("i", "!").replace("j", "_|").replace("k", "|<").replace("l", "|_").replace("m", "|\\\\/|")
-					.replace("n", "|\\|").replace("o", "0").replace("p", "9").replace("q", "(,)").replace("r", "|2")
-					.replace("s", "5").replace("t", "7").replace("u", "|_|").replace("v", "\\/").replace("w", "\\/\\/ ")
-					.replace("x", ">< ").replace("y", "`/").replace("z", "2");
+			replacements[1][i] = tmp.toLowerCase().replace("mmix", "MMIX(yeah!)").replace("java", "Java(yeah!)").replace("computer", "Computer(yeah!)")
+					.replace("risc", "Risc(yeah!)").replace("cisc", "Cisc(yeah!)").replace("debugger", "Debugger(yeah!)").replace("informatik", "Informatik(yeah!)").replace("studentin", "Studentin(yeah!)")
+							.replace("studierende", "Studeierende(yeah!)").replace("windows", "Windows(yeah!)").replace("linux", "Linux(yeah!)").replace("software", "Software(yeah!)").replace("informatikerinnen", "InformatikerInnen(yeah!)")
+							.replace("Informatiker", "Informatiker(yeah!)").replace("informatikerin", "Informatikerin(yeah!)");
 		}
 
 		for (int i = 0; i < replace.length; i++) {
