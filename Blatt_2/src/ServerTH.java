@@ -12,26 +12,22 @@ public class ServerTH {
 
     private final static String NEWPICTURE = " src=\"https://upload.wikimedia.org/wikipedia/commons/8/8d/Smiley_head_happy.svg\"";
     private static int port = 8082;
-    private static String result;
     static String current = "";
     static Socket socket;
     static ServerSocket target;
     private static Scanner scanner;
 
     public static void main(String[] args) {
-        try {
+        open();
+    }
 
+    private static void open() {
+        try {
             target = new ServerSocket(port);
             System.out.println("Waiting for Connection");
             socket = target.accept();
             System.out.println("Verbunden");
-            result = doRequest();
-            BufferedWriter toClient = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-            toClient.write("HTTP/1.0 200 OK\r\n");
-            toClient.write("Content-length: " + result.length() + "\r\n");
-            toClient.write("\r\n");
-            toClient.write(result);
-            toClient.flush();
+            doRequest();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -58,35 +54,42 @@ public class ServerTH {
             }
             URL hostUrl = new URL(host);
             System.out.println(host);
+            System.out.println(hostUrl.getProtocol());
             if (hostUrl.getProtocol().equals("https")) {
                 con = (HttpsURLConnection) hostUrl.openConnection();
             } else {
                 con = (HttpURLConnection) hostUrl.openConnection();
             }
             con.setRequestMethod("GET");
-
-            try (InputStream input = con.getInputStream();
-                    BufferedReader fromServer = new BufferedReader(new InputStreamReader(input))) {
-                for (String line = fromServer.readLine(); line != null && line.length() > 0; line = fromServer.readLine()) {
-                    line = changeYeah(line);
-                    serverResponse.append(line);
-                }
-                serverResponse = replaceImg(serverResponse);
-            } catch (MalformedURLException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (IllegalArgumentException e) {
-                e.printStackTrace();
+            con.addRequestProperty("Host", host);
+            con.addRequestProperty("Connection", "keep-alive");
+            con.setInstanceFollowRedirects(true);
+            HttpURLConnection.setFollowRedirects(true);
+            InputStream input = con.getInputStream();
+            BufferedReader fromServer = new BufferedReader(new InputStreamReader(input));
+            String line = "";
+            BufferedWriter toClient = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            while ((line = fromServer.readLine())  != null) {
+                line = changeYeah(line);
+                serverResponse.append(line);
             }
-
+            serverResponse = replaceImg(serverResponse);
+            line = serverResponse.toString();
+            toClient.write("HTTP/1.0 200 OK\r\n");
+            toClient.write("Content-length: " + line.length() + "\r\n");
+            toClient.write("\r\n");
+            toClient.write(line);
+            toClient.flush();
+            con.disconnect();
+            socket.close();
+            target.close();
+            open();
         } catch (MalformedURLException e1) {
             e1.printStackTrace();
         } catch (IOException e1) {
             e1.printStackTrace();
         }
         return serverResponse.toString();
-
     }
 
     private static StringBuilder replaceImg(StringBuilder serverResponse) {
@@ -95,7 +98,6 @@ public class ServerTH {
         int start = serverResponse.indexOf("<img");
         int ImgBlockStart;
         int ImgBlockEnde;
-        
         while (start != -1){
             end = serverResponse.indexOf(">", start);
             ImgBlock = serverResponse.substring(start, end);
@@ -107,8 +109,6 @@ public class ServerTH {
         }
         return serverResponse;
     }
-
-
 
     private static String changeYeah(String htmlString) {
         String[] replace = { "MMIX ", "Java ", "Computer ", "RISC ", "CISC ", "Debugger ", "Informatik ", "Student ",
