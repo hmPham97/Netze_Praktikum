@@ -77,6 +77,7 @@ public class ServerTH {
 			String line = "";
 			BufferedWriter toClient = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 			while ((line = fromServer.readLine())  != null) {
+				line = replaceLocal(line, host);
 				line = changeYeah(line); // tausche Text
 				serverResponse.append(line); 
 				System.out.println(line);
@@ -135,6 +136,14 @@ public class ServerTH {
 			htmlString = htmlString.replaceAll(/*"(?i)" +*/ replace[i], replace[i] + "(yeah!)");
 		}
 		return htmlString;
+	}
+
+	private static String replaceLocal(String htmlString, String link) {
+		htmlString = htmlString.replaceAll("href=\"/" , "href=\"" + link + "/");
+		if(!htmlString.contains("http")) {
+			htmlString = htmlString.replaceAll("href=\"", "href=\"" + link + "/");
+		}
+		return  htmlString;
 	}
 	
 	private static String replaceUmlaut(String input) {

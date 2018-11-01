@@ -47,7 +47,7 @@ public class ServerTH {
 		StringBuilder serverResponse = new StringBuilder();
 		try {
 			if (current.equals("")) {
-				String currentDirecotry = "C:\\Users\\Paul\\Documents\\Studium\\Softwareentwicklung 1\\eclipse-workspace-java\\Netzwerke1-Aufgab2\\config.properties";
+				String currentDirecotry = "D:\\Netze_Praktikum\\Referenz\\src\\config.properties";
 				FileReader configReader = new FileReader(currentDirecotry);
 				Properties properties = new Properties();
 				properties.load(configReader);
