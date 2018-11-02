@@ -1,0 +1,11 @@
+service myservice
+{
+socket_type = stream
+wait = no
+user = network
+server = /usr/bin/java
+disable = no
+instances = 20
+server_args = -cp /home/network/IdeaProjects/Netze/out/production/Netze Aufgabe1
+port = 4711
+}
