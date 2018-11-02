@@ -138,6 +138,12 @@ public class ServerTH {
 		return htmlString;
 	}
 
+	/**
+	 *
+	 * @param htmlString uebergebener String
+	 * @param link Linkaddresse die zu href hinzugefügt wird, falls kein link angegeben ist
+	 * @return neuer htmlString
+	 */
 	private static String replaceLocal(String htmlString, String link) {
 		htmlString = htmlString.replaceAll("href=\"/" , "href=\"" + link + "/");
 		if(!htmlString.contains("http")) {
