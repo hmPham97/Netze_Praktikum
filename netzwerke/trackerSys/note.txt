@@ -1,0 +1,45 @@
+try:
+            user = Person.objects.get(name = search_id)
+            html = ("<H1>%s</H1>", user)
+            return HttpResponse(html)
+        except Person.DoesNotExist:
+            return HttpResponse("no such user")  
+
+    #respone = requests.get(("https://geocoder.api.here.com/6.2/geocode.json?app_id={0}&app_code={1}&searchtext={2}".format(rest_ID, rest_Code, point)))
+    #respon = urlopen(("https://geocoder.api.here.com/6.2/geocode.json?app_id={0}&app_code={1}&searchtext={2}".format(rest_ID, rest_Code, point)))
+    #data = json.loads(respon.read().encode('acsii'))
+    #print(data)
+
+    <div class="form-group">
+                      <label for="exampleFormControlSelect2">Example multiple select</label>
+                      <select multiple class="form-control" id="exampleFormControlSelect2">
+                        <option>Fahrer 1</option>
+                        <option>2</option>
+                        <option>3</option>
+                        <option>4</option>
+                        <option>5</option>
+                      </select>
+                    </div>
+
+
+
+<form >
+                    
+            <input type="text" name="textfield" placeholder="start" required>
+            <br>
+            <input type="text" name="textfield2" placeholder="stop" required>
+            <br>
+            <input type="datetime-local" name="textfield3" required>
+            <br>
+            <select name = "fahr">
+                <option value="1">Fahrer 1</option>
+                <option value="2">Fahrer 2</option>
+                <option value="3">Fahrer 3</option>
+            </select>  
+            <select name = "an">
+                <option value="1">Ankunftszeit</option>
+                <option value="2">Abfahrtszeit</option>
+            </select>        
+            <br>
+            
+            </form>
