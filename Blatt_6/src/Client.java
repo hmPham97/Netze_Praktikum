@@ -72,8 +72,7 @@ public class Client {
         try {
             InetAddress adr = InetAddress.getByName(address);
             Socket tcpSocket = new Socket(adr, port);
-            BufferedOutputStream dOut = new BufferedOutputStream(tcpSocket.getOutputStream());
-            BufferedInputStream dIn = new BufferedInputStream(tcpSocket.getInputStream());
+            DataOutputStream dOut = new DataOutputStream(tcpSocket.getOutputStream());
             while (time < endTime) {
                 buf = new byte[1400];
                 dOut.write(buf);

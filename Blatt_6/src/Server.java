@@ -1,7 +1,4 @@
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.*;
 
 public class Server extends Thread {
@@ -19,8 +16,7 @@ public class Server extends Thread {
     private double result;
     private int timeout = 5000;
 
-    private BufferedOutputStream dOut;
-    private BufferedInputStream dIn;
+    private DataInputStream dIn;
     private DatagramSocket socket;
     private ServerSocket tcpServer;
 
@@ -71,18 +67,17 @@ public class Server extends Thread {
 
     private void TCP() {
         try {
+            tcpServer.setSoTimeout(timeout);
             Socket tcpSocket = tcpServer.accept();
             start = System.currentTimeMillis();
-            System.out.println(received + "" + size);
-            dIn = new BufferedInputStream(tcpSocket.getInputStream());
-            dOut = new BufferedOutputStream(tcpSocket.getOutputStream());
-            while (running) {
-                tcpServer.setSoTimeout(timeout);
-                size = dIn.available() + size;
-                dIn.skip(dIn.available());
+            dIn = new DataInputStream(tcpSocket.getInputStream());
+            while (dIn.read() != -1) {
+                System.out.println("available " + dIn.available());
+                dIn.skip(1400);
+                size += 1400;
                 System.out.println(size);
-                dOut.write();
-                dOut.flush();
+                //dOut.write();
+                //dOut.flush();
             }
             dIn.close();
         } catch (IOException e) {
