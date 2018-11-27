@@ -52,17 +52,15 @@ public class Server extends Thread {
                 size = size + packet.getLength(); // get its length
             }
         } catch (IOException e) {
-            //e.printStackTrace();
-        }
-        end = System.currentTimeMillis() - timeout;
-        end = (end - start) / 1000;
-        dsize = size * 0.008;
-        result = dsize / end;
-        System.out.println("RECEIVED: " + received);
-        System.out.println("Size in byte: " + size);
-        System.out.println("SIZE IN kbit: " + dsize);
-        System.out.println("TIME in sec: " + end);
-        System.out.println(result + " in kbit/sec");
+            end = System.currentTimeMillis() - timeout;
+            end = (end - start) / 1000;
+            dsize = size * 0.008;
+            result = dsize / end;
+            System.out.println("RECEIVED: " + received);
+            System.out.println("Size in byte: " + size);
+            System.out.println("SIZE IN kbit: " + dsize);
+            System.out.println("TIME in sec: " + end);
+            System.out.println(result + " in kbit/sec");        }
     }
 
     private void TCP() {
@@ -72,18 +70,14 @@ public class Server extends Thread {
             start = System.currentTimeMillis();
             dIn = new DataInputStream(tcpSocket.getInputStream());
             while (dIn.read() != -1) {
-                System.out.println("available " + dIn.available());
+                int i = dIn.available();
                 dIn.skip(1400);
                 size += 1400;
-                System.out.println(size);
-                //dOut.write();
-                //dOut.flush();
             }
             dIn.close();
         } catch (IOException e) {
-            // e.printStackTrace();
         }
-        end = System.currentTimeMillis() - timeout;
+        end = System.currentTimeMillis();
         end = (end - start) / 1000;
         dsize = size * 0.008;
         result = dsize / end;

@@ -14,6 +14,7 @@ public class Client {
     private static double sendRate = 0;
 
 
+    private static String Paul = "10.179.0.214";
     private static boolean UDP = false;
 
 
@@ -70,8 +71,8 @@ public class Client {
     public static void tcpClient(int delay, int offset) {
         start = System.currentTimeMillis();
         try {
-            InetAddress adr = InetAddress.getByName(address);
-            Socket tcpSocket = new Socket(adr, port);
+            //InetAddress adr = InetAddress.getByName(address);
+            Socket tcpSocket = new Socket(Paul, port);
             DataOutputStream dOut = new DataOutputStream(tcpSocket.getOutputStream());
             while (time < endTime) {
                 buf = new byte[1400];
