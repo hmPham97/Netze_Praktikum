@@ -1,0 +1,10 @@
+> set FLASK_APP=hello --> mac und linux
+> flask run
+
+> $env:FLASK_APP = "hello" --> powershell
+> flask run
+
+$ export FLASK_APP=hello --> windows cmd
+$ flask run 
+
+ # python manage.py process_tasks
