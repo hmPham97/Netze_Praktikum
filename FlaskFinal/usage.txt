@@ -1,0 +1,18 @@
+$env:FLASK_APP = "taxi.py" --> powershell
+flask run
+
+export FLASK_APP="taxi.py" --> mac und linux 
+flask run 
+
+#backgroundTask
+python3 back.py
+
+#Datenbank abfragen
+python3 DataBaseCreator.py
+
+curl -d '{ "Driver": "1", "Status": "inaktiv", "currentPlace":"Frankfurt"}' -H "Content-Type: application/json; charset=utf-8;"POST http://localhost:5000/api
+curl -d '{ "Driver": "1", "Status": "waiting", "currentPlace":"Frankfurt"}' -H "Content-Type: application/json; charset=utf-8;"POST http://localhost:5000/api
+curl -d '{ "Driver": "1", "Status": "driving", "currentPlace":"Frankfurt"}' -H "Content-Type: application/json; charset=utf-8;"POST http://localhost:5000/api
+curl -d '{ "Driver": "1", "Status": "drivingNotInTime", "currentPlace":"Moskau"}' -H "Content-Type: application/json; charset=utf-8;"POST http://localhost:5000/api
+
+curl -d '{ "Driver": "1", "Status": "drivingNotInTime", "currentPlace":"lasfapfokapfk"}' -H "Content-Type: application/json; charset=utf-8;"POST http://localhost:5000/api
