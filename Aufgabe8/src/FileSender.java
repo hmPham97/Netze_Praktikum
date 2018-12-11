@@ -10,14 +10,23 @@ public class FileSender {
         SEND, WAIT_FOR_ACK, DONE;
     }
 
+
     private DatagramSocket socket;
     private File f;
-    private byte[] buf;
     private InetAddress adr;
     private int port;
+
+    // SENDER NECESSARY
+    private byte[] buf;
     private int length;
     private int offset;
+
     private DatagramPacket packet;
+
+    // RECEIVED FROM RECEIVER
+    private DatagramPacket fromServer;
+    private byte[] fromServerBuf = new byte[1028];
+
     private State state;
 
     public FileSender(String file, String address) {
@@ -37,11 +46,14 @@ public class FileSender {
         try{
            // socket.setSoTimeout(10000);
             packet = new DatagramPacket(buf, offset, length, adr, port);
+            if(offset == buf.length) {
+                throw new IOException();
+            }
             this.offset = setOffset();
             socket.send(packet);
             state = State.WAIT_FOR_ACK;
         } catch (IOException e) {
-            // invoke endzustand
+            state = State.DONE;
         }
     }
 
@@ -49,6 +61,8 @@ public class FileSender {
         try {
             socket.setSoTimeout(10000);
             state = State.SEND;
+            fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
+            socket.receive(fromServer);
         } catch (IOException e) {
             send(getOffset());
         }
