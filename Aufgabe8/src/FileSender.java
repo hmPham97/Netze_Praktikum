@@ -6,6 +6,10 @@ import java.nio.file.Paths;
 
 public class FileSender {
 
+    private enum State {
+        SEND, WAIT_FOR_ACK, DONE;
+    }
+
     private DatagramSocket socket;
     private File f;
     private byte[] buf;
@@ -14,8 +18,11 @@ public class FileSender {
     private int length;
     private int offset;
     private DatagramPacket packet;
+    private State state;
+
     public FileSender(String file, String address) {
         try {
+            state = State.SEND;
             socket = new DatagramSocket();
             File f = new File(file);
             Path path = Paths.get(f.getAbsolutePath());
@@ -32,6 +39,7 @@ public class FileSender {
             packet = new DatagramPacket(buf, offset, length, adr, port);
             this.offset = setOffset();
             socket.send(packet);
+            state = State.WAIT_FOR_ACK;
         } catch (IOException e) {
             // invoke endzustand
         }
@@ -40,7 +48,7 @@ public class FileSender {
     public void waitForACK() {
         try {
             socket.setSoTimeout(10000);
-
+            state = State.SEND;
         } catch (IOException e) {
             send(getOffset());
         }
