@@ -6,8 +6,12 @@ import java.nio.file.Paths;
 
 public class FileSender {
 
-    private enum State {
-        SEND, WAIT_FOR_ACK, DONE;
+    enum State {
+        SEND_PACKET, WAIT_FOR_ACK, DONE;
+    }
+
+    enum Doing {
+        SENDING_TO_RECEIVER, RECEIVED_ACK_FROM_RECEIVER, FOUND_NOTHING_LEFT;
     }
 
 
@@ -27,11 +31,23 @@ public class FileSender {
     private DatagramPacket fromServer;
     private byte[] fromServerBuf = new byte[1028];
 
-    private State state;
+    private State currentState;
+    private Transition[][] transitions;
 
+
+    /**
+     * Start the Automat for Sender. Starts automat in SEND_PACKET state. Also start up socket for Sender.
+     *
+     * @param file    The file which will be used.
+     * @param address The destination where the file will be send to.
+     */
     public FileSender(String file, String address) {
         try {
-            state = State.SEND;
+            currentState = State.SEND_PACKET;
+            transitions = new Transition[State.values().length][Doing.values().length];
+            transitions[State.SEND_PACKET.ordinal()][Doing.SENDING_TO_RECEIVER.ordinal()] = new Send_To_Wait();
+            transitions[State.WAIT_FOR_ACK.ordinal()][Doing.RECEIVED_ACK_FROM_RECEIVER.ordinal()] = new Wait_To_Send();
+            transitions[State.SEND_PACKET.ordinal()][Doing.FOUND_NOTHING_LEFT.ordinal()] = new Send_To_Close();
             socket = new DatagramSocket();
             File f = new File(file);
             Path path = Paths.get(f.getAbsolutePath());
@@ -42,31 +58,46 @@ public class FileSender {
         }
     }
 
+    /**
+     * Sends the packet. Puts current state to WAIT_FOR_ACK;
+     *
+     * @param offset
+     */
     public void send(int offset) {
-        try{
-           // socket.setSoTimeout(10000);
-            packet = new DatagramPacket(buf, offset, length, adr, port);
-            if(offset == buf.length) {
-                throw new IOException();
+        try {
+            socket.setSoTimeout(500000);
+            if (currentState == State.SEND_PACKET) {
+                // socket.setSoTimeout(10000);
+                packet = new DatagramPacket(buf, offset, length, adr, port);
+                if (offset == buf.length) {
+                    throw new IOException();
+                }
+                socket.send(packet);
+                process(Doing.SENDING_TO_RECEIVER);
+            } else if (currentState == State.WAIT_FOR_ACK) {
+                packet = getPacket();
+                socket.send(packet);
             }
-            this.offset = setOffset();
-            socket.send(packet);
-            state = State.WAIT_FOR_ACK;
         } catch (IOException e) {
-            state = State.DONE;
+            System.err.println("bye");
+            process(Doing.FOUND_NOTHING_LEFT);
         }
     }
 
     public void waitForACK() {
-        try {
-            socket.setSoTimeout(10000);
-            state = State.SEND;
-            fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
-            socket.receive(fromServer);
-        } catch (IOException e) {
-            send(getOffset());
+        if (currentState == State.WAIT_FOR_ACK) {
+            try {
+                socket.setSoTimeout(10000);
+                fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
+                socket.receive(fromServer);
+                offset = setOffset();
+            } catch (IOException e) {
+                send(getOffset());
+            }
         }
     }
+
+
 
     private int getOffset() {
         return offset;
@@ -80,7 +111,45 @@ public class FileSender {
         return length;
     }
 
-    public DatagramPacket getPacket() {
+    private DatagramPacket getPacket() {
         return packet;
+    }
+
+
+    public void process(Doing input) {
+        System.out.println("INFO Received " + input + " in state " + currentState);
+        Transition trans = transitions[currentState.ordinal()][input.ordinal()];
+        if (trans != null) {
+            currentState = trans.execute(input);
+        }
+        System.out.println("current state: " + currentState);
+    }
+
+    abstract class Transition {
+        abstract public State execute(Doing input);
+    }
+
+    class Send_To_Wait extends Transition {
+        @Override
+        public State execute(Doing input) {
+            System.out.println("Sending packet");
+            return State.WAIT_FOR_ACK;
+        }
+    }
+
+    class Wait_To_Send extends Transition {
+        @Override
+        public State execute(Doing input) {
+            System.out.println("Got an ACK. Sending packet again");
+            return State.SEND_PACKET;
+        }
+    }
+
+    class Send_To_Close extends Transition {
+        @Override
+        public State execute(Doing input) {
+            System.out.println("No more packet available. Done with process");
+            return State.DONE;
+        }
     }
 }
