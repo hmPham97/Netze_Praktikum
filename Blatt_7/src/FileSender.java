@@ -81,9 +81,10 @@ public class FileSender {
 				}
 				socket.send(packet);
 				process(Doing.SENDING_TO_RECEIVER);
+				waitForACK();
 			} else if (currentState == State.WAIT_FOR_ACK) {
-				packet = getPacket();
-				socket.send(packet);
+				socket.send(getPacket());
+				waitForACK();
 			}
 		} catch (SocketException e) {
 			System.err.println("No receiver connected with sender");
@@ -92,6 +93,31 @@ public class FileSender {
 			process(Doing.FOUND_NOTHING_LEFT);
 		}
 	}
+
+	public void waitForACK() {
+		if (currentState == State.WAIT_FOR_ACK) {
+			try {
+				socket.setSoTimeout(15000);
+				fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
+				socket.receive(fromServer);
+				receivedFromServer = fromServer.getData()[0];
+				if(receivedFromServer == 1) {
+					offset = setOffset();
+					process(Doing.RECEIVED_ACK_FROM_RECEIVER);
+				} else {
+					send(getOffset());
+				}
+			} catch (SocketTimeoutException e) {
+				send(getOffset());
+			}
+			catch (IOException e) {
+				System.out.println("Receive failed");
+				send(getOffset());
+			}
+		}
+	}
+
+
 
 	private byte[] createPacket() {
 		if ((getFileLength() - offset) >= 1388) {
@@ -148,29 +174,6 @@ public class FileSender {
 		sequenceNumber++;
 
 		return data;
-	}
-
-	public void waitForACK() {
-		if (currentState == State.WAIT_FOR_ACK) {
-			try {
-				socket.setSoTimeout(10000);
-				fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
-				socket.receive(fromServer);
-				receivedFromServer = fromServer.getData()[0];
-				if(receivedFromServer == 1) {
-					offset = setOffset();
-					process(Doing.RECEIVED_ACK_FROM_RECEIVER);
-				} else {
-					send(getOffset());
-				}
-			} catch (SocketTimeoutException e) {
-				send(getOffset());
-			}
-			catch (IOException e) {
-				System.out.println("Receive failed");
-				send(getOffset());
-			}
-		}
 	}
 
 	private int getOffset() {
