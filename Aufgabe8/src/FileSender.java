@@ -3,6 +3,8 @@ import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
 
 public class FileSender {
 
@@ -19,20 +21,23 @@ public class FileSender {
     private File f;
     private InetAddress adr;
     private int port;
+    private Checksum checksum;
 
     // SENDER NECESSARY
     private byte[] buf;
-    private int length;
+    private int length = 1400;
     private int offset;
 
     private DatagramPacket packet;
 
     // RECEIVED FROM RECEIVER
     private DatagramPacket fromServer;
-    private byte[] fromServerBuf = new byte[1028];
+    private byte[] fromServerBuf = new byte[1];
 
     private State currentState;
     private Transition[][] transitions;
+
+    private int receivedFromServer;
 
 
     /**
@@ -48,11 +53,12 @@ public class FileSender {
             transitions[State.SEND_PACKET.ordinal()][Doing.SENDING_TO_RECEIVER.ordinal()] = new Send_To_Wait();
             transitions[State.WAIT_FOR_ACK.ordinal()][Doing.RECEIVED_ACK_FROM_RECEIVER.ordinal()] = new Wait_To_Send();
             transitions[State.SEND_PACKET.ordinal()][Doing.FOUND_NOTHING_LEFT.ordinal()] = new Send_To_Close();
-            socket = new DatagramSocket();
+            socket = new DatagramSocket(port);
             File f = new File(file);
             Path path = Paths.get(f.getAbsolutePath());
             buf = Files.readAllBytes(path);
             adr = InetAddress.getByName(address);
+            checksum = new CRC32();
         } catch (IOException e) {
             System.err.println("Socket Exception");
         }
@@ -65,19 +71,23 @@ public class FileSender {
      */
     public void send(int offset) {
         try {
-            socket.setSoTimeout(500000);
+            socket.setSoTimeout(30000);
             if (currentState == State.SEND_PACKET) {
                 // socket.setSoTimeout(10000);
                 packet = new DatagramPacket(buf, offset, length, adr, port);
                 if (offset == buf.length) {
-                    throw new IOException();
+                    process(Doing.FOUND_NOTHING_LEFT);
                 }
+                checksum.update(buf,offset,length);
+                System.out.println(checksum.getValue());
                 socket.send(packet);
                 process(Doing.SENDING_TO_RECEIVER);
             } else if (currentState == State.WAIT_FOR_ACK) {
                 packet = getPacket();
                 socket.send(packet);
             }
+        } catch (SocketException e) {
+            System.err.println("No receiver connected with sender");
         } catch (IOException e) {
             System.err.println("bye");
             process(Doing.FOUND_NOTHING_LEFT);
@@ -90,8 +100,18 @@ public class FileSender {
                 socket.setSoTimeout(10000);
                 fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
                 socket.receive(fromServer);
-                offset = setOffset();
-            } catch (IOException e) {
+                receivedFromServer = fromServer.getData()[0];
+                if(receivedFromServer == 1) {
+                    offset = setOffset();
+                    process(Doing.RECEIVED_ACK_FROM_RECEIVER);
+                } else {
+                    send(getOffset());
+                }
+            } catch (SocketTimeoutException e) {
+                send(getOffset());
+            }
+            catch (IOException e) {
+                System.out.println("Receive failed");
                 send(getOffset());
             }
         }
@@ -109,6 +129,10 @@ public class FileSender {
 
     public int getLength() {
         return length;
+    }
+
+    public int getFIleLength() {
+        return buf.length;
     }
 
     private DatagramPacket getPacket() {
@@ -132,7 +156,7 @@ public class FileSender {
     class Send_To_Wait extends Transition {
         @Override
         public State execute(Doing input) {
-            System.out.println("Sending packet");
+            System.out.println("SENDING_TO_RECEIVER");
             return State.WAIT_FOR_ACK;
         }
     }
