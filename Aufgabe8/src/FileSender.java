@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -22,6 +23,7 @@ public class FileSender {
     private InetAddress adr;
     private int port;
     private Checksum checksum;
+    private long sequencenumber;
 
     // SENDER NECESSARY
     private byte[] buf;
@@ -33,6 +35,7 @@ public class FileSender {
     // RECEIVED FROM RECEIVER
     private DatagramPacket fromServer;
     private byte[] fromServerBuf = new byte[1];
+    private ByteBuffer wholePacket;
 
     private State currentState;
     private Transition[][] transitions;
@@ -58,6 +61,7 @@ public class FileSender {
             Path path = Paths.get(f.getAbsolutePath());
             buf = Files.readAllBytes(path);
             adr = InetAddress.getByName(address);
+            sequencenumber = 0;
             checksum = new CRC32();
         } catch (IOException e) {
             System.err.println("Socket Exception");
@@ -74,7 +78,11 @@ public class FileSender {
             socket.setSoTimeout(30000);
             if (currentState == State.SEND_PACKET) {
                 // socket.setSoTimeout(10000);
-                packet = new DatagramPacket(buf, offset, length, adr, port);
+                //packet = new DatagramPacket(buf, offset, length, adr, port);
+                wholePacket = ByteBuffer.allocate(4);
+                wholePacket.putLong(sequencenumber);
+                sequencenumber++;
+                //packet = new DatagramPacket(whol)
                 if (offset == buf.length) {
                     process(Doing.FOUND_NOTHING_LEFT);
                 }
