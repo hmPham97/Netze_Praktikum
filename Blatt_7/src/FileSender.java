@@ -4,7 +4,10 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Random;
 import java.util.zip.CRC32;
 
 public class FileSender {
@@ -16,6 +19,15 @@ public class FileSender {
 	enum Doing {
 		SENDING_TO_RECEIVER, RECEIVED_ACK_FROM_RECEIVER, FOUND_NOTHING_LEFT;
 	}
+
+	int chanceTwoTimes = 5;
+	int chanceChange = 5;
+	int chanceDelete = 5;
+	String twoTimes = "twoTimes";
+	String change = "change";
+	String delete = "delete";
+	String normal = "normal";
+	ArrayList<String> arr = new ArrayList<String>();
 
 	private DatagramSocket socket;
 	private File f;
@@ -40,14 +52,13 @@ public class FileSender {
 	private byte[] sendFileByte;
 
 
-	/**
-	 * Start the Automat for Sender. Starts automat in SEND_PACKET state. Also start up socket for Sender.
-	 *
+	/**Start the Automat for Sender. Starts automat in SEND_PACKET state. Also start up socket for Sender.
 	 * @param file    The file which will be used.
 	 * @param address The destination where the file will be send to.
 	 */
 	public FileSender(String file, String address) {
 		try {
+			initArr();
 			currentState = State.SEND_PACKET;
 			transitions = new Transition[State.values().length][Doing.values().length];
 			transitions[State.SEND_PACKET.ordinal()][Doing.SENDING_TO_RECEIVER.ordinal()] = new Send_To_Wait();
@@ -63,9 +74,7 @@ public class FileSender {
 		}
 	}
 
-	/**
-	 * Sends the packet. Puts current state to WAIT_FOR_ACK;
-	 *
+	/**Sends the packet. Puts current state to WAIT_FOR_ACK;
 	 * @param offset
 	 */
 	public void send(int offset) {
@@ -79,11 +88,11 @@ public class FileSender {
 					process(Doing.FOUND_NOTHING_LEFT);
 					//beende Programm
 				}
-				socket.send(packet);
+				decideSend(packet);
 				process(Doing.SENDING_TO_RECEIVER);
 				waitForACK();
 			} else if (currentState == State.WAIT_FOR_ACK) {
-				socket.send(getPacket());
+				decideSend(getPacket());
 				waitForACK();
 			}
 		} catch (SocketException e) {
@@ -93,7 +102,51 @@ public class FileSender {
 			process(Doing.FOUND_NOTHING_LEFT);
 		}
 	}
+	
+	/**holt sich aus dem array arr der groesse 100 einen zufaelligen string. je nach string wird das paket manipuliert und versendet,
+	 * nicht versendet, versendet oder doppelt versendet
+	 * @param packet2
+	 * @throws IOException
+	 */
+	private void decideSend(DatagramPacket packet2) throws IOException {
+		int rnd = new Random().nextInt(100);
+		String current = arr.get(rnd);
 
+		if (!current.equalsIgnoreCase(delete)) {
+			socket.send(packet2);
+		}
+		else if (current.equalsIgnoreCase(twoTimes)) {
+			socket.send(packet2);
+			socket.send(packet2);
+		}
+		else if (current.equalsIgnoreCase(change)) {
+			byte wrongFileByte[] = manipulate(sendFileByte);
+			DatagramPacket wrongPacket = new DatagramPacket(wrongFileByte , wrongFileByte.length , adr , port);
+			socket.send(wrongPacket);
+		}
+	}
+
+	/**manipuliert einzelne bits von jedem Byte (12-1400) des Byte Arrays. Byte 0-11 enthaelt die Sequenznummer und Checksumme.
+	 * Diese sollen nicht manipuliert werden.
+	 * @param sendFileByte2
+	 * @return
+	 */
+	private byte[] manipulate(byte[] sendFileByte2) {
+		byte[] result = sendFileByte2;
+		for (int i = 12 ; i < 1400 ;i++) {
+			if (i % 2 == 0) {
+				result[i] = (byte) (result[i] | (1 << 4));
+				result[i] = (byte) (result[i] | (1 << 6));
+			} else {
+				result[i] = (byte) (result[i]  & ~ (0 << 4));
+				result[i] = (byte) (result[i]  & ~ (0 << 6));
+			}	
+		}
+		return result;
+	}
+
+	/**Sender wartet auf eine Antwort des Receivers
+	 */
 	public void waitForACK() {
 		if (currentState == State.WAIT_FOR_ACK) {
 			try {
@@ -117,63 +170,88 @@ public class FileSender {
 		}
 	}
 
-
-
+	/**erzeugt das Paket das versendet wird. Byte 0-7 = Checksumme. Byte 8-11 = Sequenznummer. Byte 12-1400 = Daten.
+	 * @return
+	 */
 	private byte[] createPacket() {
+		byte byteArray[];
 		if ((getFileLength() - offset) >= 1388) {
-			byte byteArray[] = Arrays.copyOfRange(buf, offset, offset + length);
-			byteArray = appendSequenceNumber(byteArray);
-			byteArray = appendChecksum(byteArray);
-			return byteArray;
+			byteArray = Arrays.copyOfRange(buf, offset, offset + length);
 		}
 		else {
-			byte byteArray[] = Arrays.copyOfRange(buf, offset, getFileLength() - offset);
-			byteArray = appendSequenceNumber(byteArray);
-			byteArray = appendChecksum(byteArray);
-			return byteArray;
+			byteArray = Arrays.copyOfRange(buf, offset, getFileLength() - offset);
 		}
+		byteArray = appendSequenceNumber(byteArray);
+		byteArray = appendChecksum(byteArray);
+		return byteArray;
 	}
-
-	private byte[] appendChecksum(byte[] data) {
-		CRC32 crc = new CRC32();
-		crc.update(data);
-
-		byte[] checksum = longToBytes(crc.getValue());
-
-		data = concat(checksum,data);
-
-		return data; 
-	}
-
-	private byte[] concat(byte[] checksum, byte[] data) {
-
-		int checksumLen = checksum.length;
-		int dataLen = data.length;
-		byte[] result = new byte[checksumLen + dataLen];
-		System.arraycopy(checksum, 0, result, 0, checksumLen);
-		System.arraycopy(data, 0, result, checksumLen, dataLen);
-		return result;
-	}
-
-	private byte[] longToBytes(long l) {
-		byte b[] = new byte[8];
-
-		ByteBuffer buf = ByteBuffer.wrap(b);
-		buf.putLong(l);
-		return b;
-
-	}
-
+	
+	/**an das byte Array data wird vorne die Sequenznummer angehaengt (4 Byte).
+	 * @param data
+	 * @return
+	 */
 	private byte[] appendSequenceNumber(byte[] data) {
 		ByteBuffer buffer = ByteBuffer.allocate(4);
 		buffer.putInt(sequenceNumber);
 		byte[] packetSequence = buffer.array();
-
 		data = concat(packetSequence,data);
-
 		sequenceNumber++;
-
 		return data;
+	}
+
+	/**an das byte Array data wird vorne die Checksumme angehaengt (4 Byte).
+	 * @param data
+	 * @return
+	 */
+	private byte[] appendChecksum(byte[] data) {
+		CRC32 crc = new CRC32();
+		crc.update(data);
+		byte[] checksum = longToBytes(crc.getValue());
+		data = concat(checksum,data);
+		return data; 
+	}
+
+	/**data1 wird vor data2 gehaengt (in einem neuen byte array result).
+	 * @param data1
+	 * @param data2
+	 * @return
+	 */
+	private byte[] concat(byte[] data1, byte[] data2) {
+		int data1Len = data1.length;
+		int data2Len = data2.length;
+		byte[] result = new byte[data1Len + data2Len];
+		System.arraycopy(data1, 0, result, 0, data1Len);
+		System.arraycopy(data2, 0, result, data1Len, data2Len);
+		return result;
+	}
+
+	/**wird benoetigt da die checksumme den datentyp long hat aber in einem byte array gespeichert werden soll.
+	 * @param l
+	 * @return
+	 */
+	private byte[] longToBytes(long l) {
+		byte b[] = new byte[8];
+		ByteBuffer buf = ByteBuffer.wrap(b);
+		buf.putLong(l);
+		return b;
+	}
+	
+	/**wird benoetigt um einstellige wahrcheinlichkeiten von 4 ereignissen zu erzeugen.
+	 */
+	private void initArr() {
+		for (int i = 0; i < chanceTwoTimes; i++) {
+			arr.add(twoTimes);
+		}
+		for (int j = 0; j < chanceChange; j++) {
+			arr.add(change);
+		}
+		for (int k = 0; k < chanceDelete; k++) {
+			arr.add(delete);
+		}
+		for (int z = 0; z < 100 - chanceTwoTimes - chanceChange - chanceDelete; z++) {
+			arr.add(normal);
+		}
+		Collections.shuffle(arr);
 	}
 
 	private int getOffset() {

@@ -71,8 +71,8 @@ public class Client {
     public static void tcpClient(int delay, int offset) {
         start = System.currentTimeMillis();
         try {
-            //InetAddress adr = InetAddress.getByName(address);
-            Socket tcpSocket = new Socket(Paul, port);
+            InetAddress adr = InetAddress.getByName(address);
+            Socket tcpSocket = new Socket(adr, port);
             DataOutputStream dOut = new DataOutputStream(tcpSocket.getOutputStream());
             while (time < endTime) {
                 buf = new byte[1400];
