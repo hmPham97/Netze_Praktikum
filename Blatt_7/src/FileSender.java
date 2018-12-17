@@ -32,13 +32,13 @@ public class FileSender {
 	private DatagramSocket socket;
 	private File f;
 	private InetAddress adr;
-	private final int port = 8000;
+	private final int port = 9001;
 	private int sequenceNumber = 0;
 
 	// SENDER NECESSARY
 	private byte[] buf;
 	private int length = 1388;
-	private int offset;
+	private int offset = 0;
 	private DatagramPacket packet;
 
 	// RECEIVED FROM RECEIVER
@@ -64,29 +64,31 @@ public class FileSender {
 			transitions[State.SEND_PACKET.ordinal()][Doing.SENDING_TO_RECEIVER.ordinal()] = new Send_To_Wait();
 			transitions[State.WAIT_FOR_ACK.ordinal()][Doing.RECEIVED_ACK_FROM_RECEIVER.ordinal()] = new Wait_To_Send();
 			transitions[State.SEND_PACKET.ordinal()][Doing.FOUND_NOTHING_LEFT.ordinal()] = new Send_To_Close();
-			socket = new DatagramSocket(port);
 			f = new File(file);
 			Path path = Paths.get(f.getAbsolutePath());
 			buf = Files.readAllBytes(path);
 			adr = InetAddress.getByName(address);
+            socket = new DatagramSocket();
+
+            send(offset);
 		} catch (IOException e) {
-			System.err.println("Socket Exception");
+			System.err.println("Socket Exception or invalid file was given");
 		}
 	}
 
 	/**Sends the packet. Puts current state to WAIT_FOR_ACK;
 	 * @param offset
 	 */
-	public void send(int offset) {
+	private void send(int offset) {
 		try {
-			socket.setSoTimeout(30000);
+			//socket.setSoTimeout(30000);
 			if (currentState == State.SEND_PACKET) {
 				socket.setSoTimeout(10000);
 				sendFileByte = createPacket();
 				packet = new DatagramPacket(sendFileByte , sendFileByte.length , adr , port);
 				if (offset >= getFileLength()) {
-					process(Doing.FOUND_NOTHING_LEFT);
-					//beende Programm
+					//process(Doing.FOUND_NOTHING_LEFT);
+					socket.close();
 				}
 				decideSend(packet);
 				process(Doing.SENDING_TO_RECEIVER);
@@ -100,6 +102,7 @@ public class FileSender {
 		} catch (IOException e) {
 			System.err.println("bye");
 			process(Doing.FOUND_NOTHING_LEFT);
+			socket.close();
 		}
 	}
 	
@@ -111,10 +114,9 @@ public class FileSender {
 	private void decideSend(DatagramPacket packet2) throws IOException {
 		int rnd = new Random().nextInt(100);
 		String current = arr.get(rnd);
-
-		if (!current.equalsIgnoreCase(delete)) {
+		if (current.equalsIgnoreCase(normal)) {
 			socket.send(packet2);
-		}
+        }
 		else if (current.equalsIgnoreCase(twoTimes)) {
 			socket.send(packet2);
 			socket.send(packet2);
@@ -123,7 +125,7 @@ public class FileSender {
 			byte wrongFileByte[] = manipulate(sendFileByte);
 			DatagramPacket wrongPacket = new DatagramPacket(wrongFileByte , wrongFileByte.length , adr , port);
 			socket.send(wrongPacket);
-		}
+        }
 	}
 
 	/**manipuliert einzelne bits von jedem Byte (12-1400) des Byte Arrays. Byte 0-11 enthaelt die Sequenznummer und Checksumme.
@@ -147,7 +149,8 @@ public class FileSender {
 
 	/**Sender wartet auf eine Antwort des Receivers
 	 */
-	public void waitForACK() {
+	private void waitForACK() {
+
 		if (currentState == State.WAIT_FOR_ACK) {
 			try {
 				socket.setSoTimeout(15000);
@@ -161,7 +164,8 @@ public class FileSender {
 					send(getOffset());
 				}
 			} catch (SocketTimeoutException e) {
-				send(getOffset());
+			    System.err.println("timedout");
+                send(getOffset());
 			}
 			catch (IOException e) {
 				System.out.println("Receive failed");
@@ -262,11 +266,7 @@ public class FileSender {
 		return offset + length;
 	}
 
-	public int getLength() {
-		return length;
-	}
-
-	public int getFileLength() {
+	private int getFileLength() {
 		return buf.length;
 	}
 
@@ -274,7 +274,7 @@ public class FileSender {
 		return packet;
 	}
 
-	public void process(Doing input) {
+	private void process(Doing input) {
 		System.out.println("INFO Received " + input + " in state " + currentState);
 		Transition trans = transitions[currentState.ordinal()][input.ordinal()];
 		if (trans != null) {
