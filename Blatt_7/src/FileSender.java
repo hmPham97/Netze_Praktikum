@@ -1,13 +1,12 @@
+import javax.xml.crypto.Data;
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Random;
+import java.util.*;
+import java.util.concurrent.TimeoutException;
 import java.util.zip.CRC32;
 
 public class FileSender {
@@ -20,19 +19,22 @@ public class FileSender {
 		SENDING_TO_RECEIVER, RECEIVED_ACK_FROM_RECEIVER, FOUND_NOTHING_LEFT;
 	}
 
-	int chanceTwoTimes = 5;
-	int chanceChange = 5;
-	int chanceDelete = 5;
+	public int manipulated;
+	int chanceTwoTimes = 0;
+	int chanceChange = 0;
+	int chanceDelete = 50;
 	String twoTimes = "twoTimes";
 	String change = "change";
 	String delete = "delete";
 	String normal = "normal";
 	ArrayList<String> arr = new ArrayList<String>();
 
+	private int endPacketSize = 1400;
 	private DatagramSocket socket;
 	private File f;
 	private InetAddress adr;
 	private final int port = 9001;
+	private final int portSendingToReceiver = 9002;
 	private int sequenceNumber = 0;
 
 	// SENDER NECESSARY
@@ -40,7 +42,7 @@ public class FileSender {
 	private int length = 1388;
 	private int offset = 0;
 	private DatagramPacket packet;
-
+    private DatagramPacket savepacket;
 	// RECEIVED FROM RECEIVER
 	private DatagramPacket fromServer;
 	private byte[] fromServerBuf = new byte[1];
@@ -58,6 +60,7 @@ public class FileSender {
 	 */
 	public FileSender(String file, String address) {
 		try {
+			String name = file.substring(file.lastIndexOf("\\") + 1);
 			initArr();
 			currentState = State.SEND_PACKET;
 			transitions = new Transition[State.values().length][Doing.values().length];
@@ -68,38 +71,66 @@ public class FileSender {
 			Path path = Paths.get(f.getAbsolutePath());
 			buf = Files.readAllBytes(path);
 			adr = InetAddress.getByName(address);
-            socket = new DatagramSocket();
-
+            socket = new DatagramSocket(port);
+            sendFileName(name.getBytes());
             send(offset);
 		} catch (IOException e) {
 			System.err.println("Socket Exception or invalid file was given");
 		}
 	}
 
+	private void sendFileName(byte[] name) {
+	    try {
+	        CRC32 check = new CRC32();
+	        check.reset();
+	        check.update(name);
+	        long v = check.getValue();
+	        ByteBuffer f = ByteBuffer.allocate(8);
+	        f.putLong(v);
+	        byte[] whole = new byte[f.array().length + name.length];
+	        System.arraycopy(f.array(), 0, whole, 0, f.array().length);
+	        System.arraycopy(name, 0, whole, f.array().length, name.length);
+            DatagramPacket containsName = new DatagramPacket(whole, whole.length, adr, portSendingToReceiver);
+            DatagramPacket gotACK = new DatagramPacket(new byte[10], 10);
+            socket.send(containsName);
+            socket.receive(gotACK);
+            System.out.println(gotACK.getData()[0]);
+            if(gotACK.getData()[0] == 0) {
+                sendFileName(name);
+            }
+        } catch (IOException e) {
+            System.err.println("Couldn't send the file name");
+        }
+    }
+
 	/**Sends the packet. Puts current state to WAIT_FOR_ACK;
 	 * @param offset
 	 */
 	private void send(int offset) {
 		try {
-			//socket.setSoTimeout(30000);
 			if (currentState == State.SEND_PACKET) {
 				socket.setSoTimeout(10000);
 				sendFileByte = createPacket();
-				packet = new DatagramPacket(sendFileByte , sendFileByte.length , adr , port);
-				if (offset >= getFileLength()) {
+				packet = new DatagramPacket(sendFileByte , sendFileByte.length , adr , portSendingToReceiver);
+                savePacket(packet);
+                if (offset >= buf.length) {
 					//process(Doing.FOUND_NOTHING_LEFT);
 					socket.close();
 				}
-				decideSend(packet);
+                System.out.println("in SEND_PACKET " + getPacket().getData()[4] + "    " + getPacket().getData()[5] + "    " + getPacket().getData()[6] +"    " + getPacket().getData()[7]);
+                decideSend(packet);
+				sequenceNumber++;
 				process(Doing.SENDING_TO_RECEIVER);
 				waitForACK();
 			} else if (currentState == State.WAIT_FOR_ACK) {
-				decideSend(getPacket());
+                System.out.println(getPacket().getData()[manipulated]);
+                decideSend(getPacket());
+                System.out.println(getPacket().getData()[4] + "    " + getPacket().getData()[5] + "    " + getPacket().getData()[6] +"    " + getPacket().getData()[7]);
 				waitForACK();
 			}
 		} catch (SocketException e) {
 			System.err.println("No receiver connected with sender");
-		} catch (IOException e) {
+		} catch (IOException | TimeoutException e) {
 			System.err.println("bye");
 			process(Doing.FOUND_NOTHING_LEFT);
 			socket.close();
@@ -115,16 +146,24 @@ public class FileSender {
 		int rnd = new Random().nextInt(100);
 		String current = arr.get(rnd);
 		if (current.equalsIgnoreCase(normal)) {
+            System.out.println(normal);
 			socket.send(packet2);
         }
 		else if (current.equalsIgnoreCase(twoTimes)) {
+            System.out.println("two times");
 			socket.send(packet2);
 			socket.send(packet2);
 		}
 		else if (current.equalsIgnoreCase(change)) {
-			byte wrongFileByte[] = manipulate(sendFileByte);
-			DatagramPacket wrongPacket = new DatagramPacket(wrongFileByte , wrongFileByte.length , adr , port);
+            System.out.println("change");
+			byte[] wrongFileByte = manipulate(sendFileByte);
+            System.out.println(manipulated);
+            System.out.println(sendFileByte[manipulated]);
+			DatagramPacket wrongPacket = new DatagramPacket(wrongFileByte , wrongFileByte.length , adr , portSendingToReceiver);
+            System.out.println(wrongFileByte[manipulated]);
 			socket.send(wrongPacket);
+        } else if (current.equalsIgnoreCase(delete)){
+            System.out.println("delete");
         }
 	}
 
@@ -134,42 +173,42 @@ public class FileSender {
 	 * @return
 	 */
 	private byte[] manipulate(byte[] sendFileByte2) {
-		byte[] result = sendFileByte2;
-		for (int i = 12 ; i < 1400 ;i++) {
-			if (i % 2 == 0) {
-				result[i] = (byte) (result[i] | (1 << 4));
-				result[i] = (byte) (result[i] | (1 << 6));
-			} else {
-				result[i] = (byte) (result[i]  & ~ (0 << 4));
-				result[i] = (byte) (result[i]  & ~ (0 << 6));
-			}	
-		}
+		byte[] result = Arrays.copyOfRange(sendFileByte2, 0, sendFileByte2.length);
+        System.out.println(result.length);
+        int rnd = new Random().nextInt(endPacketSize);
+        byte i = result[rnd];
+        if (i != 0) {
+            result[rnd] = 0;
+        } else {
+            result[rnd] = 1;
+        }
+        manipulatedBit(rnd);
 		return result;
 	}
 
 	/**Sender wartet auf eine Antwort des Receivers
 	 */
 	private void waitForACK() {
-
 		if (currentState == State.WAIT_FOR_ACK) {
 			try {
-				socket.setSoTimeout(15000);
+				socket.setSoTimeout(1000);
 				fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
 				socket.receive(fromServer);
 				receivedFromServer = fromServer.getData()[0];
 				if(receivedFromServer == 1) {
-					offset = setOffset();
+                    offset = offset + length;
 					process(Doing.RECEIVED_ACK_FROM_RECEIVER);
+					send(offset);
 				} else {
-					send(getOffset());
+                    send(offset);
 				}
 			} catch (SocketTimeoutException e) {
 			    System.err.println("timedout");
-                send(getOffset());
+                send(offset);
 			}
 			catch (IOException e) {
 				System.out.println("Receive failed");
-				send(getOffset());
+                send(offset);
 			}
 		}
 	}
@@ -177,14 +216,16 @@ public class FileSender {
 	/**erzeugt das Paket das versendet wird. Byte 0-7 = Checksumme. Byte 8-11 = Sequenznummer. Byte 12-1400 = Daten.
 	 * @return
 	 */
-	private byte[] createPacket() {
+	private byte[] createPacket() throws TimeoutException{
 		byte byteArray[];
-		if ((getFileLength() - offset) >= 1388) {
+        if ((buf.length - offset) >= 1388) {
 			byteArray = Arrays.copyOfRange(buf, offset, offset + length);
 		}
-		else {
-			byteArray = Arrays.copyOfRange(buf, offset, getFileLength() - offset);
-		}
+		else if (offset >= buf.length){
+			throw new TimeoutException();
+		} else {
+            byteArray = Arrays.copyOfRange(buf, offset, buf.length);
+        }
 		byteArray = appendSequenceNumber(byteArray);
 		byteArray = appendChecksum(byteArray);
 		return byteArray;
@@ -199,7 +240,6 @@ public class FileSender {
 		buffer.putInt(sequenceNumber);
 		byte[] packetSequence = buffer.array();
 		data = concat(packetSequence,data);
-		sequenceNumber++;
 		return data;
 	}
 
@@ -210,7 +250,9 @@ public class FileSender {
 	private byte[] appendChecksum(byte[] data) {
 		CRC32 crc = new CRC32();
 		crc.update(data);
-		byte[] checksum = longToBytes(crc.getValue());
+		ByteBuffer buff = ByteBuffer.allocate(8);
+		buff.putLong(crc.getValue());
+		byte[] checksum = buff.array();
 		data = concat(checksum,data);
 		return data; 
 	}
@@ -229,16 +271,6 @@ public class FileSender {
 		return result;
 	}
 
-	/**wird benoetigt da die checksumme den datentyp long hat aber in einem byte array gespeichert werden soll.
-	 * @param l
-	 * @return
-	 */
-	private byte[] longToBytes(long l) {
-		byte b[] = new byte[8];
-		ByteBuffer buf = ByteBuffer.wrap(b);
-		buf.putLong(l);
-		return b;
-	}
 	
 	/**wird benoetigt um einstellige wahrcheinlichkeiten von 4 ereignissen zu erzeugen.
 	 */
@@ -258,23 +290,7 @@ public class FileSender {
 		Collections.shuffle(arr);
 	}
 
-	private int getOffset() {
-		return offset;
-	}
-
-	private int setOffset() {
-		return offset + length;
-	}
-
-	private int getFileLength() {
-		return buf.length;
-	}
-
-	private DatagramPacket getPacket() {
-		return packet;
-	}
-
-	private void process(Doing input) {
+    private void process(Doing input) {
 		System.out.println("INFO Received " + input + " in state " + currentState);
 		Transition trans = transitions[currentState.ordinal()][input.ordinal()];
 		if (trans != null) {
@@ -310,4 +326,15 @@ public class FileSender {
 			return State.DONE;
 		}
 	}
+
+	private void manipulatedBit(int manipulatedBit) {
+	    manipulated = manipulatedBit;
+    }
+	private void savePacket(DatagramPacket packet1) {
+	    this.savepacket = packet1;
+    }
+
+    private DatagramPacket getPacket() {
+	    return savepacket;
+    }
 }

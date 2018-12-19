@@ -28,8 +28,8 @@ public class Client {
     static byte[] buf;
 
     public static void main(String[] args) {
-        int delay = Integer.parseInt(args[0]);
-        int packetSent = Integer.parseInt(args[1]);
+        int delay = 1;
+        int packetSent = 1;
         if (UDP) {
             udpClient(delay, packetSent);
         } else {

@@ -1,8 +1,3 @@
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.nio.ByteBuffer;
-
 public class main {
 
     public static void main(String[] args) {
@@ -48,7 +43,7 @@ public class main {
 
         //System.out.println((byte) (2 & ~ (1 << 6)));
 */
-        FileSender f = new FileSender("D:\\Netze_Praktikum\\Blatt_7\\receiver.PNg", "localhost");
+        FileSender f = new FileSender("D:\\Netze_Praktikum\\Blatt_7\\receiver.png", "localhost");
 
         /*try {
             byte[] f = new byte[]{1,100,124,127};
