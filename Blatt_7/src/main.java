@@ -44,6 +44,34 @@ public class main {
         //System.out.println((byte) (2 & ~ (1 << 6)));
 */
         FileSender f = new FileSender("D:\\Netze_Praktikum\\Blatt_7\\receiver.png", "localhost");
+        f.start();
+        boolean goThru = true;
+        int off;
+        while(goThru) {
+            off = f.getOffset();
+            if(f.getCurrentState() == FileSender.State.SendingName) {
+                f.sendFileName(f.getNameOfFile().getBytes());
+                f.send(0);
+            }
+            if(f.getCurrentState() == FileSender.State.WaitingForACKNamePacket) {
+                f.waitForACK();
+                if(f.getCurrentState() == FileSender.State.WaitingForACKNamePacket) {
+                    f.send(0);
+                }
+            }
+            if(f.getCurrentState() == FileSender.State.SendPacket) {
+                f.send(off);
+            }
+            if(f.getCurrentState() == FileSender.State.WaitingForACK) {
+                f.waitForACK();
+                if(f.getCurrentState() == FileSender.State.WaitingForACK) {
+                    f.send(off);
+                }
+            }
+            if(f.getCurrentState() == FileSender.State.Done) {
+                goThru = false;
+            }
+        }
 
         /*try {
             byte[] f = new byte[]{1,100,124,127};
