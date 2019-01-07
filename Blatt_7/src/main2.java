@@ -11,12 +11,12 @@ public class main2 {
                 filename = f.getFileName();
                 if(f.getCurrentState() == FileReceiver.State.ReceivedFromServerName) {
                     f.startPath(filename);
+                    reply = f.getNameReply();
+                    f.sendReply(reply);
                 }
             }
-            else if (f.getCurrentState() == FileReceiver.State.ReceivedFromServerName) {
-                reply = f.getNameReply();
-                f.sendReply(reply);
-            }
+            //else if (f.getCurrentState() == FileReceiver.State.ReceivedFromServerName) {
+            //}
             else if (f.getCurrentState() == FileReceiver.State.WaitForPacket) {
                 f.waitingForPacket();
             }

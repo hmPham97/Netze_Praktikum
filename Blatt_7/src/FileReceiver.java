@@ -145,7 +145,7 @@ public class FileReceiver {
      */
     public Reply waitingForPacket() {
         try {
-            socket.setSoTimeout(100000);
+            socket.setSoTimeout(10000);
             fromServer = new DatagramPacket(buffer, buffer.length);
             socket.receive(fromServer);
             fromServerAdr = fromServer.getAddress();
@@ -164,7 +164,8 @@ public class FileReceiver {
             System.out.println();
             System.out.println(currentState);
             if(sequencenumber[0] == 0 && sequencenumber[1] == 0 && sequencenumber[2] == 0 && sequencenumber[3] == 0) {
-              return getReply();
+                System.out.println("We arrived here. IT SHOULD BE ONLY PRINTED ONCE!!! Except we got a corrupt packet");
+                return getReply();
             }
             else {
                 checksum.reset();
@@ -178,11 +179,12 @@ public class FileReceiver {
                 byteBufferForSequence.putInt(seq);
                 checkSeq = byteBufferForSequence.array();
                 seq++;
-
+                System.out.println("Chceksum from calculating              checksum from sender");
                 for (int i = 0; i < checkChecksum.length; i++) {
                     System.out.println(checkChecksum[i] + "            " + check[i]);
                     if (check[i] != checkChecksum[i]) {
                         // Checksumme stimmt nicht überein
+                        System.out.println("Got a manipulated packet");
                         inHere = false;
                         seq--;
                         break;
@@ -190,8 +192,9 @@ public class FileReceiver {
                 }
 
                 if (inHere) {
+                    System.out.println("seq from sender               seq from receiver");
                     for (int i = 0; i < checkSeq.length; i++) {
-                        System.out.println(sequencenumber[i] + " " + (checkSeq[i]));
+                        System.out.println("from sender:" + sequencenumber[i] + " from receiver:" + (checkSeq[i]));
                         if (sequencenumber[i] != checkSeq[i]) {
                             alreadyReceived = true;
                             seq--;
@@ -267,17 +270,19 @@ public class FileReceiver {
         if (trans != null) {
             currentState = trans.execute(input);
         }
-        System.out.println("current state: " + currentState);
+        System.out.println("current state: " + currentState + "\n");
     }
 
     private byte[] manipulate(byte[] sendFileByte2) {
+        System.out.println(sendFileByte2.length);
+        System.out.println(sendFileByte2[0] + "    " + sendFileByte2[1]);
         byte[] copy = Arrays.copyOfRange(sendFileByte2, 0, sendFileByte2.length);
         int rnd = new Random().nextInt(sendFileByte2.length);
         if(copy[rnd] == 0) {
             copy[rnd] = 1;
         }
         else {
-            copy[rnd] = (byte) (copy[rnd] << 3);
+            copy[rnd] = 0;
         }
         return sendFileByte2;
     }

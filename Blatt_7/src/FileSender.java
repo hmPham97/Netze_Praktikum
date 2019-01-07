@@ -23,8 +23,8 @@ public class FileSender {
      */
 
     public int manipulated;
-    int chanceTwoTimes =10;
-    int chanceChange = 10;
+    int chanceTwoTimes = 0;
+    int chanceChange = 0;
     int chanceDelete = 0;
     String twoTimes = "twoTimes";
     String change = "change";
@@ -173,7 +173,7 @@ public class FileSender {
                 //AENDERN HIER
                 //waitForACK();
             } else if (currentState == State.WaitingForACK) {
-                System.out.println(getPacket().getData()[manipulated]);
+   //             System.out.println(getPacket().getData()[manipulated]);
                 decideSend(getPacket());
                 //AENDERN HIER
                 //waitForACK();
@@ -223,7 +223,7 @@ public class FileSender {
      */
     private byte[] manipulate(byte[] sendFileByte2) {
         byte[] result = Arrays.copyOfRange(sendFileByte2, 0, sendFileByte2.length);
-        System.out.println(result.length);
+    //    System.out.println(result.length);
         int rnd = new Random().nextInt(endPacketSize);
         byte i = result[rnd];
         if (i != 0) {
@@ -241,19 +241,23 @@ public class FileSender {
     public void waitForACK() {
         if (currentState == State.WaitingForACK || currentState == State.WaitingForACKNamePacket) {
             try {
-                socket.setSoTimeout(500);
+                socket.setSoTimeout(1000);
                 fromServer = new DatagramPacket(fromServerBuf, fromServerBuf.length);
                 socket.receive(fromServer);
-                for(int i = 0; i < fromServer.getLength(); i++) {
-                    System.out.println(fromServer.getData()[i]);
+                System.out.print("seqnumber : ");
+                for(int i = 0; i < 4; i++) {
+                    System.out.print(fromServer.getData()[i] + " ");
                 }
                 receivedFromServer = fromServer.getData()[7];
+                System.out.println("received a :" + receivedFromServer);
                 // hier nochmal sequenznummer vergleichen!!!! die sequenznummer von RECEIVER MUSS IMMER EINS KLEINER SEIN ALS DIE SEQUENZNUMMER DIE IN SENDER GERADE IST
                 // SOLL AUCH NE CHECKSUMMER GESENDET WERDEN?
                 if (currentState == State.WaitingForACK) {
                     boolean checking = true;
-                    byte[] checkSeq = Arrays.copyOfRange(fromServer.getData(), 0, 3);
+                    byte[] checkSeq = Arrays.copyOfRange(fromServer.getData(), 0, 4);
+                    System.out.println("Lenght of checkseq " + checkSeq.length);
                     for (int i = 0; i < checkSeq.length; i++) {
+                        System.out.println("from receiver " +checkSeq[i] + " from sender " + getArrayToCheckSeq()[i]);
                         if (checkSeq[i] != getArrayToCheckSeq()[i]) {
                             checking = false;
                             break;
@@ -261,8 +265,13 @@ public class FileSender {
                     }
                     if (checking) {
                         if (receivedFromServer == 1) {
+                            System.out.println("We arrived here. So send the next packet");
                             offset = offset + length;
+                            System.out.println("should be offset: " + offset + "     " + "\nthe offset i really got: " + getOffset());
                             process(Doing.ReceivedACKFromReceiver);
+                        }
+                        else {
+                            System.out.println("We didn't receive a correct packet. Send the packet which was wrong again. \n" + currentState);
                         }
                     }
                 }
@@ -374,6 +383,7 @@ public class FileSender {
             currentState = trans.execute(input);
         }
         System.out.println("current state: " + currentState);
+        System.out.println("\n");
     }
 
     abstract class Transition {
@@ -399,7 +409,7 @@ public class FileSender {
     class Wait_To_Send extends Transition {
         @Override
         public State execute(Doing input) {
-            System.out.println("Got an ACK. Sending packet again");
+            System.out.println("Got an ACK. Sending packet");
             return State.SendPacket;
         }
     }
