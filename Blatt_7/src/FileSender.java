@@ -152,7 +152,6 @@ public class FileSender {
         try {
             if (currentState == State.SendingName) {
                 decideSend(getContainsName());
-                sequenceNumber++;
                 process(Doing.SendingToReceiver);
             } else if (currentState == State.WaitingForACKNamePacket) {
                 decideSend(getContainsName());
@@ -167,7 +166,6 @@ public class FileSender {
                     process(Doing.FoundNothingLeftToSend);
                 } else if (currentState == State.SendPacket) {
                     decideSend(packet);
-                    sequenceNumber++;
                     process(Doing.SendingToReceiver);
                 }
                 //AENDERN HIER
@@ -248,7 +246,7 @@ public class FileSender {
                 for(int i = 0; i < 4; i++) {
                     System.out.print(fromServer.getData()[i] + " ");
                 }
-                receivedFromServer = fromServer.getData()[7];
+                receivedFromServer = fromServer.getData()[3]; // KRIEGEN EINE 1 oder eine 0
                 System.out.println("received a :" + receivedFromServer);
                 // hier nochmal sequenznummer vergleichen!!!! die sequenznummer von RECEIVER MUSS IMMER EINS KLEINER SEIN ALS DIE SEQUENZNUMMER DIE IN SENDER GERADE IST
                 // SOLL AUCH NE CHECKSUMMER GESENDET WERDEN?
@@ -264,10 +262,11 @@ public class FileSender {
                         }
                     }
                     if (checking) {
-                        if (receivedFromServer == 1) {
+                        if (receivedFromServer == sequenceNumber) {
                             System.out.println("We arrived here. So send the next packet");
                             offset = offset + length;
                             System.out.println("should be offset: " + offset + "     " + "\nthe offset i really got: " + getOffset());
+                            sequenceNumber = (sequenceNumber == 0) ? 1 : 0;
                             process(Doing.ReceivedACKFromReceiver);
                         }
                         else {
@@ -277,8 +276,8 @@ public class FileSender {
                 }
                 // kommt hier nur rein wenn WaitingForACKNamePacket
                 else {
-                    if (receivedFromServer == 1) {
-                        if (fromServer.getData()[0] == 0 || fromServer.getData()[1] == 0 || fromServer.getData()[2] == 0 || fromServer.getData()[3] == 0)
+                    if (receivedFromServer == sequenceNumber) {
+                            sequenceNumber = (sequenceNumber == 0) ? 1 : 0;
                             process(Doing.ReceivedACKFromReceiver);
                     }
                 }

@@ -33,7 +33,7 @@ public class FileReceiver {
      */
     int chanceTwoTimes = 0;
     int chanceChange = 0;
-    int chanceDelete = 0;
+    int chanceDelete = 10;
     String twoTimes = "twoTimes";
     String change = "change";
     String delete = "delete";
@@ -62,6 +62,7 @@ public class FileReceiver {
     private Reply nameReply;
     private byte[] checkSeq;
     private byte[] temporaryArray;
+    private boolean firstPacket = true;
 
     public FileReceiver() {
         try {
@@ -79,10 +80,10 @@ public class FileReceiver {
     }
 
     public void start() {
-            initArr();
-            checksum = new CRC32();
-            //String name = getFileName();
-            //waitingForPacket();
+        initArr();
+        checksum = new CRC32();
+        //String name = getFileName();
+        //waitingForPacket();
     }
 
     public void startPath(String name) {
@@ -97,6 +98,7 @@ public class FileReceiver {
 
     /**
      * aenderung evtl noetig
+     *
      * @return
      */
     public String getFileName() {
@@ -108,27 +110,37 @@ public class FileReceiver {
            /* for (int i = 0; i < name.getLength(); i++) {
                 System.out.println(name.getData()[i]);
             } */
-            CRC32 checkName = new CRC32();
-            checkName.update(name.getData(),8, name.getLength() - 8);
-            ByteBuffer f = ByteBuffer.allocate(8);
-            f.putLong(checkName.getValue());
-            byte[] comp = f.array();
-            for(int i = 0; i < comp.length; i++) {
-                System.out.println(comp[i] +  "      " + name.getData()[i]);
-                if (comp[i] != name.getData()[i]) {
-                    return "";
-                    //theName = getFileName();
-                    //return theName;
+            byte[] seqfromSender = new byte[4];
+            System.arraycopy(name.getData(), 8, seqfromSender, 0, 4);
+
+            // seq == 0
+            if (seqfromSender[3] == seq) {
+                CRC32 checkName = new CRC32();
+                checkName.update(name.getData(), 8, name.getLength() - 8);
+                ByteBuffer f = ByteBuffer.allocate(8);
+                f.putLong(checkName.getValue());
+                byte[] comp = f.array();
+
+                for (int i = 0; i < comp.length; i++) {
+                    System.out.println(comp[i] + "      " + name.getData()[i]);
+                    if (comp[i] != name.getData()[i]) {
+                        return "";
+                        //theName = getFileName();
+                        //return theName;
+                    }
                 }
             }
+
+
             ByteBuffer seqBuffer = ByteBuffer.allocate(4);
-            seqBuffer.putInt(0);
+            seqBuffer.putInt(seq);
+
             checkSeq = seqBuffer.array();
+
             theName = new String(name.getData(), 12, name.getLength() - 12);
             fromServerAdr = name.getAddress();
-            //nameACK = new DatagramPacket(new byte[]{1}, 1, fromServerAdr, portToSender);
-            //socket.send(ack);
-            nameReply = new Reply(1, false, null);
+
+            nameReply = new Reply(false, null);
             ///decideSend(nameACK);
             System.out.println("Hello we are before process");
             seq++;
@@ -145,12 +157,13 @@ public class FileReceiver {
      */
     public Reply waitingForPacket() {
         try {
+            firstPacket = false;
             socket.setSoTimeout(10000);
             fromServer = new DatagramPacket(buffer, buffer.length);
             socket.receive(fromServer);
             fromServerAdr = fromServer.getAddress();
 
-            boolean inHere = true;
+            boolean checkSumIsCorrect = true;
             boolean alreadyReceived = false;
 
             byte[] from = fromServer.getData();
@@ -158,59 +171,51 @@ public class FileReceiver {
             check = Arrays.copyOfRange(from, 0, 8);
             sequencenumber = Arrays.copyOfRange(from, 8, 12);
             fromSender = Arrays.copyOfRange(from, 12, fromServer.getLength());
-            for(int i = 0; i < sequencenumber.length; i++) {
+            for (int i = 0; i < sequencenumber.length; i++) {
                 System.out.print(sequencenumber[i]);
             }
+
+            checksum.reset();
+            checksum.update(sequencenumber);
+            checksum.update(fromSender);
+
+            ByteBuffer byteBufferForChecksum = ByteBuffer.allocate(8);
+            byteBufferForChecksum.putLong(checksum.getValue());
+            byte[] checkChecksum = byteBufferForChecksum.array();
+            // check = von sender           checkChecksum ist von receiver
+            System.out.println("Chceksum from calculating              checksum from sender");
+            for (int i = 0; i < checkChecksum.length; i++) {
+                System.out.println(checkChecksum[i] + "            " + check[i]);
+                if (check[i] != checkChecksum[i]) {
+                    // Checksumme stimmt nicht überein
+                    System.out.println("Got a manipulated packet");
+                    checkSumIsCorrect = false;
+                    break;
+                }
+            }
+
+
             System.out.println();
             System.out.println(currentState);
-            if(sequencenumber[0] == 0 && sequencenumber[1] == 0 && sequencenumber[2] == 0 && sequencenumber[3] == 0) {
+            if (checkSumIsCorrect && sequencenumber[3] == 1) {
+                firstPacket = false;
+            }
+            if (checkSumIsCorrect && firstPacket && sequencenumber[3] == 0) {
                 System.out.println("We arrived here. IT SHOULD BE ONLY PRINTED ONCE!!! Except we got a corrupt packet");
                 return getReply();
-            }
-            else {
-                checksum.reset();
-                checksum.update(sequencenumber);
-                checksum.update(fromSender);
+            } else {
 
-                ByteBuffer byteBufferForChecksum = ByteBuffer.allocate(8);
-                byteBufferForChecksum.putLong(checksum.getValue());
-                byte[] checkChecksum = byteBufferForChecksum.array();
-                ByteBuffer byteBufferForSequence = ByteBuffer.allocate(4);
-                byteBufferForSequence.putInt(seq);
-                checkSeq = byteBufferForSequence.array();
-                seq++;
-                System.out.println("Chceksum from calculating              checksum from sender");
-                for (int i = 0; i < checkChecksum.length; i++) {
-                    System.out.println(checkChecksum[i] + "            " + check[i]);
-                    if (check[i] != checkChecksum[i]) {
-                        // Checksumme stimmt nicht überein
-                        System.out.println("Got a manipulated packet");
-                        inHere = false;
-                        seq--;
-                        break;
-                    }
-                }
-
-                if (inHere) {
-                    System.out.println("seq from sender               seq from receiver");
-                    for (int i = 0; i < checkSeq.length; i++) {
-                        System.out.println("from sender:" + sequencenumber[i] + " from receiver:" + (checkSeq[i]));
-                        if (sequencenumber[i] != checkSeq[i]) {
-                            alreadyReceived = true;
-                            seq--;
-                            break;
-                        }
-                    }
-                }
-
-                if (inHere) {
-                    if (alreadyReceived) {
-                        reply = new Reply(1, false, null);
-                    } else {
-                        reply = new Reply(1, true, fromSender);
-                    }
+                if (checkSumIsCorrect && seq == sequencenumber[3]) {
+                    alreadyReceived = false;
+                    seq = (seq == 0) ? 1 : 0;
                 } else {
-                    reply = new Reply(0, false, null);
+                    alreadyReceived = true;
+                }
+
+                if (alreadyReceived) {
+                    reply = new Reply(false, null);
+                } else {
+                    reply = new Reply(true, fromSender);
                 }
                 process(Doing.ReceiveFromServer);
             }
@@ -229,14 +234,24 @@ public class FileReceiver {
      */
     public void sendReply(Reply reply1) {
         System.out.println("i am in inside sendreply");
-        temporaryArray = createPacket(reply1.getValue());
+        boolean state = reply1.getBoolean();
+        int curSeq;
+        if (state) {
+            curSeq = seq;
+        } else {
+            curSeq = (seq == 0) ? 1 : 0;
+        }
+        if(firstPacket) {
+            curSeq = 0;
+        }
+        temporaryArray = createPacket(curSeq);
         /*sendToSender = new byte[]{0};
         if (reply1.getValue() == 1) {
             sendToSender[0] = 1;
         }
         */
         try {
-            if (reply1.getBoolean() && seq != 0) {
+            if (state && !firstPacket) {
                 Files.write(path, reply1.getData(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             }
             DatagramPacket sending = new DatagramPacket(temporaryArray, temporaryArray.length, fromServerAdr, portToSender);
@@ -278,30 +293,27 @@ public class FileReceiver {
         System.out.println(sendFileByte2[0] + "    " + sendFileByte2[1]);
         byte[] copy = Arrays.copyOfRange(sendFileByte2, 0, sendFileByte2.length);
         int rnd = new Random().nextInt(sendFileByte2.length);
-        if(copy[rnd] == 0) {
+        if (copy[rnd] == 0) {
             copy[rnd] = 1;
-        }
-        else {
+        } else {
             copy[rnd] = 0;
         }
         return sendFileByte2;
     }
 
     class Reply {
-        int i;
         boolean didNotGetAPacketBefore;
         byte[] data;
-        public Reply(int i, boolean didNotGetPacketBefore, byte[] data) {
-            this.i = i;
+
+        public Reply(boolean didNotGetPacketBefore, byte[] data) {
             this.didNotGetAPacketBefore = didNotGetPacketBefore;
             this.data = data;
         }
-        public int getValue() {
-            return i;
-        }
+
         public boolean getBoolean() {
             return didNotGetAPacketBefore;
         }
+
         public byte[] getData() {
             return data;
         }
@@ -311,7 +323,7 @@ public class FileReceiver {
         abstract public State execute(Doing input);
     }
 
-    class GotName extends  Transition {
+    class GotName extends Transition {
         @Override
         public State execute(Doing input) {
             System.out.println("Got file name. Sending ACK");
@@ -392,10 +404,11 @@ public class FileReceiver {
         buffer.putInt(ack);
         byte[] packetACK = buffer.array();
         byte[] arraypacket;
-        arraypacket = concat(getCheckSeq(), packetACK);
-        return arraypacket;
+        //arraypacket = concat(getCheckSeq(), packetACK);
+        return packetACK;
     }
 
+    /*
     private byte[] concat(byte[] data1, byte[] data2) {
         int data1Len = data1.length;
         int data2Len = data2.length;
@@ -404,5 +417,6 @@ public class FileReceiver {
         System.arraycopy(data2, 0, result, data1Len, data2Len);
         return result;
     }
+    */
 }
 
