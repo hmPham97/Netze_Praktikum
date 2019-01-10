@@ -17,7 +17,7 @@ import java.util.zip.Checksum;
 /**
  * Sequenznummmer mitschicken.
  */
-public class FileReceiver {
+public class FileReceiverOO {
 
     enum State {
         WaitingForName, WaitForPacket, ReceivedFromServer, ReceivedFromServerName, Done;
@@ -47,6 +47,7 @@ public class FileReceiver {
     private int portToReceiver = 9002;
     private byte[] buffer = new byte[1400];
     private State currentState;
+    private InetAddress address;
     private byte[] sequencenumber = new byte[4];
     private byte[] check = new byte[8];
     private byte[] fromSender;
@@ -55,11 +56,13 @@ public class FileReceiver {
     private Transition[][] transitions;
     private InetAddress fromServerAdr;
     private Reply reply;
+    private DatagramPacket nameACK;
     private Reply nameReply;
+    private byte[] checkSeq;
     private byte[] temporaryArray;
     private boolean firstPacket = true;
 
-    public FileReceiver() {
+    public FileReceiverOO() {
         try {
             currentState = State.WaitingForName;
             transitions = new Transition[State.values().length][Doing.values().length];
@@ -77,14 +80,12 @@ public class FileReceiver {
     public void start() {
         initArr();
         checksum = new CRC32();
-        //String name = getFileName();
-        //waitingForPacket();
     }
 
     public void startPath(String name) {
         try {
             path = Paths.get(name);
-            System.out.println(name);
+            System.out.println("Name of the file we got " + name);
             Files.deleteIfExists(path);
         } catch (IOException e) {
             System.err.println();
@@ -98,19 +99,12 @@ public class FileReceiver {
      */
     public String getFileName() {
         String theName;
-        byte[] checkSeq;
         try {
-            System.out.println(currentState);
             DatagramPacket name = new DatagramPacket(new byte[1400], 1400);
             socket.receive(name);
-           /* for (int i = 0; i < name.getLength(); i++) {
-                System.out.println(name.getData()[i]);
-            } */
             byte[] seqfromSender = new byte[4];
             System.arraycopy(name.getData(), 8, seqfromSender, 0, 4);
 
-            // seq == 0
-            System.out.println("seqFromSender has following value: " + seqfromSender[3]);
             if (seqfromSender[3] == seq) {
                 CRC32 checkName = new CRC32();
                 checkName.update(name.getData(), 8, name.getLength() - 8);
@@ -119,11 +113,8 @@ public class FileReceiver {
                 byte[] comp = f.array();
 
                 for (int i = 0; i < comp.length; i++) {
-                    System.out.println(comp[i] + "      " + name.getData()[i]);
                     if (comp[i] != name.getData()[i]) {
                         return "";
-                        //theName = getFileName();
-                        //return theName;
                     }
                 }
             }
@@ -132,14 +123,11 @@ public class FileReceiver {
             ByteBuffer seqBuffer = ByteBuffer.allocate(4);
             seqBuffer.putInt(seq);
 
-            checkSeq = seqBuffer.array();
 
             theName = new String(name.getData(), 12, name.getLength() - 12);
             fromServerAdr = name.getAddress();
 
             nameReply = new Reply(false, null);
-            ///decideSend(nameACK);
-            System.out.println("Hello we are before process");
             seq++;
             process(Doing.ReceiveFromServer);
             return theName;
@@ -168,43 +156,28 @@ public class FileReceiver {
             check = Arrays.copyOfRange(from, 0, 8);
             sequencenumber = Arrays.copyOfRange(from, 8, 12);
             fromSender = Arrays.copyOfRange(from, 12, fromServer.getLength());
-            for (int i = 0; i < sequencenumber.length; i++) {
-                System.out.print(sequencenumber[i]);
-            }
-            System.out.println();
             checksum.reset();
             checksum.update(sequencenumber, 0, sequencenumber.length);
             checksum.update(fromSender, 0, fromSender.length);
-            System.out.println("sequencenumber has the following value: " + sequencenumber[3]);
             ByteBuffer byteBufferForChecksum = ByteBuffer.allocate(8);
             byteBufferForChecksum.putLong(checksum.getValue());
             byte[] checkChecksum = byteBufferForChecksum.array();
-            // check = von sender           checkChecksum ist von receiver
-            System.out.println("Chceksum from calculating              checksum from sender");
             for (int i = 0; i < checkChecksum.length; i++) {
-                System.out.println(checkChecksum[i] + "            " + check[i]);
                 if (check[i] != checkChecksum[i]) {
-                    // Checksumme stimmt nicht überein
-                    System.out.println("Got a manipulated packet");
                     checkSumIsCorrect = false;
                     break;
                 }
             }
 
-
-            System.out.println();
-            System.out.println(currentState);
             if (checkSumIsCorrect && sequencenumber[3] == 1) {
                 firstPacket = false;
             }
             if (checkSumIsCorrect && firstPacket && sequencenumber[3] == 0) {
-                System.out.println("We arrived here. IT SHOULD BE ONLY PRINTED ONCE!!! Except we got a corrupt packet");
                 return getReply();
             } else {
 
                 if (checkSumIsCorrect && seq == sequencenumber[3]) {
                     alreadyReceived = false;
-                    //seq = (seq == 0) ? 1 : 0;
                 } else {
                     alreadyReceived = true;
                 }
@@ -230,12 +203,8 @@ public class FileReceiver {
      * @param reply1
      */
     public void sendReply(Reply reply1) {
-        System.out.println("i am in inside sendreply");
         boolean state = reply1.getBoolean();
         int curSeq;
-        System.out.println("state: " + state);
-        System.out.println("firstpacket "  + firstPacket);
-        System.out.println("my current seq " + seq);
         if (state) {
             curSeq = seq;
             seq = (seq == 0) ? 1 : 0;
@@ -246,9 +215,6 @@ public class FileReceiver {
             curSeq = 0;
         }
         temporaryArray = createPacket(curSeq);
-        for(int i = 0; i < temporaryArray.length; i++) {
-            System.out.println("inside the packet is at position: [" + i + "]    " + temporaryArray[i]);
-        }
         try {
             if (state && !firstPacket) {
                 Files.write(path, reply1.getData(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -256,7 +222,6 @@ public class FileReceiver {
             DatagramPacket sending = new DatagramPacket(temporaryArray, temporaryArray.length, fromServerAdr, portToSender);
             decideSend(sending);
             process(Doing.SendToServer);
-            //waitingForPacket();
         } catch (IOException e) {
             System.out.println("Failling to write");
         }
@@ -265,13 +230,15 @@ public class FileReceiver {
     public void decideSend(DatagramPacket packet2) throws IOException {
         int rnd = new Random().nextInt(100);
         String current = arr.get(rnd);
-        System.out.println(arr.get(rnd));
         if (current.equalsIgnoreCase(normal)) {
+            System.out.println("normal");
             socket.send(packet2);
         } else if (current.equalsIgnoreCase(twoTimes)) {
+            System.out.println("twotimes");
             socket.send(packet2);
             socket.send(packet2);
         } else if (current.equalsIgnoreCase(change)) {
+            System.out.println("change");
             byte wrongFileByte[] = manipulate(packet2.getData());
             DatagramPacket wrongPacket = new DatagramPacket(wrongFileByte, wrongFileByte.length, fromServerAdr, portToSender);
             socket.send(wrongPacket);
@@ -288,10 +255,8 @@ public class FileReceiver {
     }
 
     private byte[] manipulate(byte[] sendFileByte2) {
-        System.out.println("lenght of sendfilebyte2: " + sendFileByte2.length);
         byte[] copy = Arrays.copyOfRange(sendFileByte2, 0, sendFileByte2.length);
         int rnd = new Random().nextInt(sendFileByte2.length);
-        System.out.println("random value which is replacing: " + rnd);
         if (copy[rnd] == 0) {
             copy[rnd] = 1;
         } else {
