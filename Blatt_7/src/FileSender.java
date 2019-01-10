@@ -23,9 +23,9 @@ public class FileSender {
      */
 
     public int manipulated;
-    int chanceTwoTimes = 0;
-    int chanceChange = 0;
-    int chanceDelete = 0;
+    int chanceTwoTimes = 10;
+    int chanceChange = 5;
+    int chanceDelete = 5;
     String twoTimes = "twoTimes";
     String change = "change";
     String delete = "delete";
@@ -49,7 +49,7 @@ public class FileSender {
     private DatagramPacket savepacket;
     // RECEIVED FROM RECEIVER
     private DatagramPacket fromServer;
-    private byte[] fromServerBuf = new byte[8];
+    private byte[] fromServerBuf = new byte[9];
     private State currentState;
     private Transition[][] transitions;
 
@@ -124,7 +124,6 @@ public class FileSender {
             f.putLong(v);
             System.arraycopy(f.array(), 0, whole, 0, f.array().length);
             System.arraycopy(part, 0, whole, f.array().length, part.length);
-
             containsName = new DatagramPacket(whole, whole.length, adr, portSendingToReceiver);
             DatagramPacket gotACK = new DatagramPacket(new byte[10], 10);
             //socket.send(containsName);
@@ -204,7 +203,12 @@ public class FileSender {
             socket.send(packet2);
         } else if (current.equalsIgnoreCase(change)) {
             System.out.println("change");
-            byte[] wrongFileByte = manipulate(sendFileByte);
+            byte[] wrongFileByte;
+            if(currentState == State.SendingName || currentState == State.WaitingForACKNamePacket) {
+                wrongFileByte = manipulate(getContainsName().getData());
+            } else {
+                wrongFileByte = manipulate(sendFileByte);
+            }
             DatagramPacket wrongPacket = new DatagramPacket(wrongFileByte, wrongFileByte.length, adr, portSendingToReceiver);
             socket.send(wrongPacket);
         } else if (current.equalsIgnoreCase(delete)) {
@@ -222,12 +226,13 @@ public class FileSender {
     private byte[] manipulate(byte[] sendFileByte2) {
         byte[] result = Arrays.copyOfRange(sendFileByte2, 0, sendFileByte2.length);
     //    System.out.println(result.length);
-        int rnd = new Random().nextInt(endPacketSize);
+        int rnd = new Random().nextInt(sendFileByte2.length);
+        System.out.println("my rnd is the following value: " + rnd);
         byte i = result[rnd];
         if (i != 0) {
-            result[rnd] = 0;
+            result[rnd] = 2;
         } else {
-            result[rnd] = 1;
+            result[rnd] = 2;
         }
         manipulatedBit(rnd);
         return result;
@@ -246,45 +251,53 @@ public class FileSender {
                 for(int i = 0; i < 4; i++) {
                     System.out.print(fromServer.getData()[i] + " ");
                 }
-                receivedFromServer = fromServer.getData()[3]; // KRIEGEN EINE 1 oder eine 0
+                receivedFromServer = fromServer.getData()[0]; // KRIEGEN EINE 1 oder eine 0
+                boolean compared = compareChecksum(fromServer.getData());
+                System.out.println(compared);
+                //Thread.sleep(1000);
                 System.out.println("received a :" + receivedFromServer);
                 // hier nochmal sequenznummer vergleichen!!!! die sequenznummer von RECEIVER MUSS IMMER EINS KLEINER SEIN ALS DIE SEQUENZNUMMER DIE IN SENDER GERADE IST
                 // SOLL AUCH NE CHECKSUMMER GESENDET WERDEN?
-                if (currentState == State.WaitingForACK) {
-                    boolean checking = true;
-                    byte[] checkSeq = Arrays.copyOfRange(fromServer.getData(), 0, 4);
-                    System.out.println("Lenght of checkseq " + checkSeq.length);
-                    for (int i = 0; i < checkSeq.length; i++) {
-                        System.out.println("from receiver " +checkSeq[i] + " from sender " + getArrayToCheckSeq()[i]);
-                        if (checkSeq[i] != getArrayToCheckSeq()[i]) {
-                            checking = false;
-                            break;
+                if(compared) {
+                    if (currentState == State.WaitingForACK) {
+                        System.out.println("we got inside waitingforack in the method");
+                        boolean checking = true;
+                      //  byte[] checkSeq = Arrays.copyOfRange(fromServer.getData(), 0, 1);
+                       // System.out.println("Lenght of checkseq " + checkSeq.length);
+                       // for (int i = 0; i < checkSeq.length; i++) {
+                        //    System.out.println("from receiver " + checkSeq[i] + " from sender " + getArrayToCheckSeq()[i]);
+                        System.out.println("received from receiver: " +receivedFromServer + "      what i have inside sender: " + getArrayToCheckSeq()[3]);
+                        if (receivedFromServer != getArrayToCheckSeq()[3]) {
+                                checking = false;
+                              //  break;
+                            }
+                        //}
+                        if (checking) {
+                            if (receivedFromServer == sequenceNumber) {
+                                System.out.println("We arrived here. So send the next packet");
+                                offset = offset + length;
+                                System.out.println("should be offset: " + offset + "     " + "\nthe offset i really got: " + getOffset());
+                                sequenceNumber = (sequenceNumber == 0) ? 1 : 0;
+                                process(Doing.ReceivedACKFromReceiver);
+                            } else {
+                                System.out.println("We didn't receive a correct packet. Send the packet which was wrong again. \n" + currentState);
+                            }
                         }
                     }
-                    if (checking) {
+                    // kommt hier nur rein wenn WaitingForACKNamePacket
+                    else {
                         if (receivedFromServer == sequenceNumber) {
-                            System.out.println("We arrived here. So send the next packet");
-                            offset = offset + length;
-                            System.out.println("should be offset: " + offset + "     " + "\nthe offset i really got: " + getOffset());
                             sequenceNumber = (sequenceNumber == 0) ? 1 : 0;
                             process(Doing.ReceivedACKFromReceiver);
                         }
-                        else {
-                            System.out.println("We didn't receive a correct packet. Send the packet which was wrong again. \n" + currentState);
-                        }
-                    }
-                }
-                // kommt hier nur rein wenn WaitingForACKNamePacket
-                else {
-                    if (receivedFromServer == sequenceNumber) {
-                            sequenceNumber = (sequenceNumber == 0) ? 1 : 0;
-                            process(Doing.ReceivedACKFromReceiver);
                     }
                 }
             } catch (SocketTimeoutException e) {
                 System.err.println("timedout");
             } catch (IOException e) {
                 System.out.println("Receive failed");
+            //} catch (InterruptedException e) {
+
             }
         }
     }
@@ -302,6 +315,8 @@ public class FileSender {
             throw new TimeoutException();
         } else {
             byteArray = Arrays.copyOfRange(buf, offset, buf.length);
+            endPacketSize = byteArray.length;
+            System.out.println("last packet has the length:  " + byteArray.length);
         }
         byteArray = appendSequenceNumber(byteArray);
         byteArray = appendChecksum(byteArray);
@@ -455,5 +470,24 @@ public class FileSender {
 
     public String getNameOfFile() {
         return nameOfFile;
+    }
+
+    public boolean compareChecksum(byte[] dataFromServer) {
+        byte[] checkIt = new byte[8];
+        System.arraycopy(dataFromServer, 1, checkIt, 0, dataFromServer.length - 1);
+        CRC32 checkCompare = new CRC32();
+        checkCompare.reset();
+        int value = dataFromServer[0];
+        checkCompare.update(value);
+        ByteBuffer calculatedCheck = ByteBuffer.allocate(8);
+        calculatedCheck.putLong(checkCompare.getValue());
+        byte[] putIntoArray = calculatedCheck.array();
+        for(int i = 0; i < putIntoArray.length; i++) {
+            //System.out.println("checkit: " + checkIt[i] + "       putIntoArray: " + putIntoArray[i]);
+            if(checkIt[i] != putIntoArray[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }
