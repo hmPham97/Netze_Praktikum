@@ -58,6 +58,11 @@ public class FileReceiver {
     private Reply nameReply;
     private byte[] temporaryArray;
     private boolean firstPacket = true;
+    private long time;
+    private boolean timeStart = true;
+    private long endTime;
+    private int timeout = 10000;
+    private long filesize = 0;
 
     public FileReceiver() {
         try {
@@ -103,6 +108,10 @@ public class FileReceiver {
             System.out.println(currentState);
             DatagramPacket name = new DatagramPacket(new byte[1400], 1400);
             socket.receive(name);
+            if(timeStart) {
+                time = System.currentTimeMillis();
+                timeStart = false;
+            }
            /* for (int i = 0; i < name.getLength(); i++) {
                 System.out.println(name.getData()[i]);
             } */
@@ -155,7 +164,7 @@ public class FileReceiver {
     public Reply waitingForPacket() {
         try {
             firstPacket = false;
-            socket.setSoTimeout(10000);
+            socket.setSoTimeout(timeout);
             fromServer = new DatagramPacket(buffer, buffer.length);
             socket.receive(fromServer);
             fromServerAdr = fromServer.getAddress();
@@ -218,6 +227,11 @@ public class FileReceiver {
             }
         } catch (IOException e) {
             System.out.println("Timed out.");
+            endTime = System.currentTimeMillis() - timeout;
+            time = (endTime - time) / 1000;
+            System.out.println("size of file " + filesize);
+            System.out.println("goodput " + filesize/time);
+            System.out.println("time it took to send " + time);
             process(Doing.TimedOut);
             socket.close();
         }
@@ -251,6 +265,9 @@ public class FileReceiver {
         }
         try {
             if (state && !firstPacket) {
+                filesize += reply1.getData().length;
+                System.out.println("size of the reply1.getdata " + reply1.getData().length);
+                System.out.println("size of file " + filesize);
                 Files.write(path, reply1.getData(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             }
             DatagramPacket sending = new DatagramPacket(temporaryArray, temporaryArray.length, fromServerAdr, portToSender);

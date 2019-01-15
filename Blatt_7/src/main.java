@@ -1,12 +1,12 @@
 public class main {
 
     public static void main(String[] args) {
-        String one = "10.179.14.216";
+        String one = "10.179.9.15";
         String lukas = "10.179.12.46";
         String two = "localhost";
         String testrar = "D:\\Netze_Praktikum\\Blatt_7\\test.rar";
-        String testpic = "D:\\Netze_Praktikum\\Blatt_7\\sender.png";
-        FileSender f = new FileSender(testpic, lukas);
+        String testpic = "D:\\Netze_Praktikum\\Blatt_7\\bonus_illustration.jpg";
+        FileSender f = new FileSender(testrar, two);
         f.start();
         boolean goThru = true;
         int off;
